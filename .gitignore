@@ -1,0 +1,16 @@
+*.class
+out/
+build/
+
+data/*
+!data/.gitkeep
+
+certs/*
+!certs/.gitkeep
+
+doc/*
+!doc/.gitkeep
+
+scripts/*.sh
+!scripts/start-server.sh
+!scripts/start-client.sh
