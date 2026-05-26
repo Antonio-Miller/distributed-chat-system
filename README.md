@@ -1,41 +1,191 @@
-# CPD 2025/2026 - Distributed Chat System
+# CPD 2025/2026 - TCP Chat System in Java 21
 
-Initial repository scaffold for the Java SE 21 chat system assignment.
+Multi-user client-server chat system for the CPD Distributed Systems assignment.
 
-## How to run
+## Features
 
-This repository currently contains the project skeleton. Once the Java sources are added under `src/main/java`, compile them with:
+- TCP client-server architecture with Java SE 21 virtual threads.
+- User authentication (LOGIN/REGISTER) with salted SHA-256 password hashing persisted to file.
+- Token-based session resumption after broken TCP connections (2-hour TTL).
+- Multiple chat rooms with timeline-style messages and history on join.
+- AI rooms with a configurable prompt backed by a local LLM (Ollama).
+- Shared data structures protected with `ReentrantLock` / `Condition` (no `java.util.concurrent` collections).
+- Bounded per-session outbound queues prevent slow clients from blocking broadcasts.
+
+## Requirements
+
+- Java SE 21 or newer.
+- (Optional) Ollama running locally for AI rooms.
+
+## Compile
+
+Linux / macOS / Git Bash:
 
 ```bash
-cd /home/josebreis05/repos/g11/assign2
-find src/main/java -name "*.java" > sources.txt
+cd assign2
 mkdir -p out
-javac -d out @sources.txt
+find src/main/java -name "*.java" | sort > sources.txt
+javac --release 21 -d out @sources.txt
 ```
 
-After compilation, start the server in one terminal:
+PowerShell:
+
+```powershell
+cd assign2
+.\scripts\compile.ps1
+```
+
+## Run server
 
 ```bash
-java -cp out chat.server.Server [port]
+java -cp out chat.server.ChatServer [port]
 ```
 
-The default port is `5000` if no port is provided.
+Default port is `12345`. The server creates `data/users.db` automatically.
 
-In another terminal, start a client:
+Default users: `alice/1234`, `bob/1234`, `eve/1234`.
+
+Or use the helper scripts:
 
 ```bash
-java -cp out chat.client.Client [host] [port]
+./scripts/start-server.sh [port]
+# or on Windows:
+.\scripts\start-server.ps1 [port]
 ```
 
-The default host is `localhost` and the default port is `5000`.
+## Run clients
 
-You can also use the helper scripts from the project root:
+Open two or more terminals:
 
 ```bash
-./start-server.sh [port]
-./start-client.sh [host] [port]
+java -cp out chat.client.ChatClient [host] [port]
 ```
 
-The scripts now compile the current Java sources into `out/` and launch the rough starter server and client.
+Or:
 
+```bash
+./scripts/start-client.sh [host] [port]
+# or on Windows:
+.\scripts\start-client.ps1 [host] [port]
+```
 
+## Client commands
+
+Before authentication:
+
+```
+/login <username> <password>
+/register <username> <password>
+```
+
+After authentication:
+
+```
+/rooms                          List available rooms
+/join <room name>               Join or create a normal room
+/create <room name>             Same as /join
+/createai <room>|<prompt>       Create an AI room with a system prompt
+/leave                          Leave the current room
+/quit                           Disconnect
+```
+
+Any line that does not start with `/` is sent as a chat message.
+
+## Example session
+
+```
+/login alice 1234
+/join General
+hello everyone
+/createai AI doodle|Summarize availability proposals and suggest a meeting time.
+I can meet Monday at 10 or Tuesday after 14.
+```
+
+## Ollama setup (for AI rooms)
+
+Default settings:
+
+```
+OLLAMA_URL=http://localhost:11434/api/generate
+OLLAMA_MODEL=llama3.2
+```
+
+Override with environment variables or system properties:
+
+```bash
+java -Dollama.model=llama3.2:1b -cp out chat.server.ChatServer 12345
+```
+
+## Protocol
+
+Client to server:
+
+```
+LOGIN <username> <password>
+REGISTER <username> <password>
+RESUME <token>
+ROOMS
+JOIN <room name>
+CREATE <room name>
+CREATEAI <room name>|<prompt>
+JOINAI <room name>|<prompt>
+MSG <text>
+LEAVE
+QUIT
+```
+
+Server to client:
+
+```
+OK <text>
+ERR <text>
+TOKEN <token>
+ROOM <NORMAL|AI> <room name>
+END_ROOMS
+JOINED <room name>
+LEFT <room name>
+HISTORY_BEGIN <room name>
+CHAT <timeline line>
+HISTORY_END <room name>
+```
+
+## Architecture
+
+```
+src/main/java/chat/
+  common/
+    Protocol.java              Protocol constants
+  server/
+    ChatServer.java            TCP accept loop with virtual threads
+    ClientConnection.java      Per-connection command handler
+    ServerState.java           Shared services container
+    AuthService.java           Users, password hashing, persistence
+    SessionManager.java        Token/session registry
+    Session.java               Authenticated user state + output queue
+    OutboundQueue.java         Bounded lock/condition queue per session
+    RoomManager.java           Room registry
+    Room.java                  Timeline, members, broadcast, AI trigger
+    RoomInfo.java              Room metadata record
+    AiService.java             Ollama HTTP client
+    JsonUtil.java              Minimal JSON helpers for Ollama
+    PasswordUtil.java          SHA-256 hashing utilities
+    UserRecord.java            User credential record
+  client/
+    ChatClient.java            Terminal client with reconnect logic
+```
+
+## Concurrency design
+
+Room broadcasts never write directly to sockets. Each `Session` has a bounded `OutboundQueue` (`ArrayDeque` + `ReentrantLock` + `Condition`). A dedicated virtual-thread writer per connection drains the queue to the socket. If a client is too slow, the oldest queued messages are dropped for that client only.
+
+All shared structures use ordinary Java collections with explicit locks:
+
+- `AuthService`: `HashMap` + `ReentrantLock`
+- `SessionManager`: `HashMap` + `ReentrantLock`
+- `RoomManager`: `HashMap` + `ReentrantLock`
+- `Room`: `ArrayList` + `HashSet` + `ReentrantLock`
+- `OutboundQueue`: `ArrayDeque` + `ReentrantLock` + `Condition`
+
+## Fault tolerance
+
+After login/register the server sends a `TOKEN`. The client stores it in memory (never credentials). If the TCP connection breaks, the client reconnects and sends `RESUME <token>`. The server binds the new connection to the existing session, preserving room membership and queued messages. Tokens expire after 2 hours.
