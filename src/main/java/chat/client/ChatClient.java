@@ -9,13 +9,16 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.locks.ReentrantLock;
+import javax.net.ssl.SSLSocketFactory;
 
 public final class ChatClient {
     private final String host;
     private final int port;
+    private final boolean useTls;
     private final ReentrantLock connectionLock = new ReentrantLock();
 
     private Socket socket;
@@ -25,15 +28,17 @@ public final class ChatClient {
     private volatile boolean reconnecting = false;
     private volatile String token;
 
-    public ChatClient(String host, int port) {
+    public ChatClient(String host, int port, boolean useTls) {
         this.host = host;
         this.port = port;
+        this.useTls = useTls;
     }
 
     public static void main(String[] args) {
         String host = args.length >= 1 ? args[0] : "localhost";
         int port = args.length >= 2 ? Integer.parseInt(args[1]) : 12345;
-        ChatClient client = new ChatClient(host, port);
+        boolean useTls = args.length >= 3 && args[2].equalsIgnoreCase("--tls");
+        ChatClient client = new ChatClient(host, port, useTls);
         client.start();
     }
 
@@ -54,7 +59,20 @@ public final class ChatClient {
     private void connect() throws IOException {
         connectionLock.lock();
         try {
-            Socket newSocket = new Socket(host, port);
+            Socket newSocket;
+            if (useTls) {
+                try {
+                    SSLSocketFactory factory = chat.server.SslUtil.createClientSocketFactory(
+                            Path.of("data", "chat-client.p12"), "12345678");
+                    newSocket = factory.createSocket(host, port);
+                    System.out.println("[Connected with TLS]");
+                } catch (Exception e) {
+                    System.out.println("TLS connection failed: " + e.getMessage() + ". Trying plain TCP...");
+                    newSocket = new Socket(host, port);
+                }
+            } else {
+                newSocket = new Socket(host, port);
+            }
             newSocket.setTcpNoDelay(true);
             socket = newSocket;
             serverReader = new BufferedReader(new InputStreamReader(newSocket.getInputStream(), StandardCharsets.UTF_8));

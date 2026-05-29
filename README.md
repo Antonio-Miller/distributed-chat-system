@@ -23,6 +23,12 @@ Linux / macOS / Git Bash:
 
 ```bash
 cd assign2
+./build.sh
+```
+
+Or manually:
+
+```bash
 mkdir -p out
 find src/main/java -name "*.java" | sort > sources.txt
 javac --release 21 -d out @sources.txt
@@ -33,6 +39,8 @@ PowerShell:
 ```powershell
 cd assign2
 .\scripts\compile.ps1
+# or use the build script:
+.\build.bat
 ```
 
 ## Run server
@@ -101,6 +109,42 @@ hello everyone
 I can meet Monday at 10 or Tuesday after 14.
 ```
 
+## Security & TLS (optional)
+
+The server and client support optional TLS/SSL encryption (TLS 1.2+):
+
+### Setup TLS (one-time)
+
+Generate a self-signed keystore:
+
+```bash
+# Option 1: Use the helper script
+cd assign2
+./scripts/setup-tls.sh
+
+# Option 2: Use keytool manually
+keytool -genkey -alias chat-server \
+  -keystore data/chat-server.p12 \
+  -storetype PKCS12 \
+  -storepass 12345678 \
+  -validity 365 \
+  -keyalg RSA -keysize 2048 \
+  -dname "CN=localhost,O=CPD,C=PT" \
+  -noprompt
+```
+
+### Run with TLS
+
+```bash
+# Start server with TLS
+java -cp out chat.server.ChatServer 12345 data/users.db --tls
+
+# Connect with TLS
+java -cp out chat.client.ChatClient localhost 12345 --tls
+```
+
+If the keystore is not found, the server falls back to plain TCP (with a warning).
+
 ## Ollama setup (for AI rooms)
 
 Default settings:
@@ -160,18 +204,23 @@ src/main/java/chat/
     ClientConnection.java      Per-connection command handler
     ServerState.java           Shared services container
     AuthService.java           Users, password hashing, persistence
-    SessionManager.java        Token/session registry
+    SessionManager.java        Token/session registry with persistence
     Session.java               Authenticated user state + output queue
+    SessionPersistence.java    Load/save sessions to data/sessions.db
     OutboundQueue.java         Bounded lock/condition queue per session
     RoomManager.java           Room registry
     Room.java                  Timeline, members, broadcast, AI trigger
     RoomInfo.java              Room metadata record
     AiService.java             Ollama HTTP client
     JsonUtil.java              Minimal JSON helpers for Ollama
+    SslUtil.java               TLS socket factory helpers
     PasswordUtil.java          SHA-256 hashing utilities
     UserRecord.java            User credential record
   client/
-    ChatClient.java            Terminal client with reconnect logic
+    ChatClient.java            Terminal client with reconnect logic + TLS
+  
+  test/java/chat/test/
+    ChatSystemTest.java        Integration test suite
 ```
 
 ## Concurrency design
@@ -189,3 +238,34 @@ All shared structures use ordinary Java collections with explicit locks:
 ## Fault tolerance
 
 After login/register the server sends a `TOKEN`. The client stores it in memory (never credentials). If the TCP connection breaks, the client reconnects and sends `RESUME <token>`. The server binds the new connection to the existing session, preserving room membership and queued messages. Tokens expire after 2 hours.
+
+Sessions and tokens are persisted to `data/sessions.db` and reloaded on server restart, allowing users to resume even after server downtime.
+
+## Testing
+
+Run basic integration tests (server must be running on port 12345):
+
+```bash
+cd assign2
+
+# Terminal 1: Start server
+java -cp out chat.server.ChatServer 12345
+
+# Terminal 2: Run tests
+mkdir -p out-test
+javac --release 21 -cp out -d out-test src/test/java/chat/test/ChatSystemTest.java
+java -cp out:out-test chat.test.ChatSystemTest
+```
+
+The test suite validates:
+- TCP connection handling
+- User registration and authentication
+- Token generation
+- Room listing and joining
+- Session resumption (fault tolerance)
+
+## Data files
+
+- `data/users.db` — User credentials (salted SHA-256 hashes), created/appended on first run with default users (alice/bob/eve).
+- `data/sessions.db` — Active session tokens and expiration times, loaded on server startup to support session resumption across restarts.
+- `data/chat-server.p12` — TLS keystore (for `--tls` mode), generated via `scripts/setup-tls.sh`.
