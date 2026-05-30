@@ -28,8 +28,14 @@ open_term() {
   local title="$1"; shift
   local cmd="$*"
 
-  if command -v gnome-terminal >/dev/null 2>&1; then
-    gnome-terminal --title="$title" -- bash -c "$cmd; echo; echo 'Press ENTER to close...'; read -r"
+
+  # Prefer modern/non-snap terminals first to avoid known snap/libc issues.
+  if command -v kitty >/dev/null 2>&1; then
+    kitty --title "$title" bash -c "$cmd; echo; echo 'Press ENTER to close...'; read -r" &
+    return 0
+  fi
+  if command -v alacritty >/dev/null 2>&1; then
+    alacritty --title "$title" -e bash -lc "$cmd; echo; echo 'Press ENTER to close...'; read -r" &
     return 0
   fi
   if command -v konsole >/dev/null 2>&1; then
@@ -48,9 +54,14 @@ open_term() {
     xterm -T "$title" -hold -e bash -c "$cmd" &
     return 0
   fi
-  if command -v kitty >/dev/null 2>&1; then
-    kitty --title "$title" bash -c "$cmd; echo; echo 'Press ENTER to close...'; read -r" &
-    return 0
+  # gnome-terminal can be a snap and fail on some systems; try it last and fall back if it errors
+  if command -v gnome-terminal >/dev/null 2>&1; then
+    if gnome-terminal -- bash -c "echo 'test'" >/dev/null 2>&1; then
+      gnome-terminal --title="$title" -- bash -c "$cmd; echo; echo 'Press ENTER to close...'; read -r"
+      return 0
+    else
+      echo "gnome-terminal detected but failed to start correctly; skipping to next available terminal." >&2
+    fi
   fi
 
   # Fallback: run in background in current terminal
@@ -90,6 +101,29 @@ if [[ "$USE_TLS" == "yes" ]]; then
 else
   SERVER_CMD="java -jar $JAR 12345 data/users.db"
   CLIENT_CMD="java -cp $JAR chat.client.ChatClient localhost 12345"
+fi
+
+# Probe Ollama endpoint before launching server. If it is unreachable or returns non-2xx,
+# start the server in MOCK_AI mode so AI rooms still work with a canned reply.
+OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434/api/generate}"
+echo "[run_all] Probing Ollama endpoint: $OLLAMA_URL"
+OLLAMA_STATUS=0
+if command -v curl >/dev/null 2>&1; then
+  if curl -sS -o /dev/null -w "%{http_code}" "$OLLAMA_URL" >/tmp/ollama_status.$$ 2>/dev/null; then
+    OLLAMA_STATUS=$(cat /tmp/ollama_status.$$)
+    rm -f /tmp/ollama_status.$$
+  else
+    OLLAMA_STATUS=0
+  fi
+else
+  echo "[run_all] curl not available; skipping Ollama probe" >&2
+fi
+
+if [[ "$OLLAMA_STATUS" -lt 200 || "$OLLAMA_STATUS" -ge 300 ]]; then
+  echo "[run_all] Ollama probe returned status $OLLAMA_STATUS — starting server in MOCK_AI mode"
+  SERVER_CMD="MOCK_AI=1 $SERVER_CMD"
+else
+  echo "[run_all] Ollama responded with HTTP $OLLAMA_STATUS — using real AI service"
 fi
 
 # Start server terminal

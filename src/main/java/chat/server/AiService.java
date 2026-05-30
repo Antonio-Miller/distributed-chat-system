@@ -14,14 +14,22 @@ final class AiService {
             .build();
     private final URI endpoint;
     private final String model;
+    private final boolean mock;
 
     AiService() {
         String url = getenvOrProperty("OLLAMA_URL", "ollama.url", "http://localhost:11434/api/generate");
         this.endpoint = URI.create(url);
         this.model = getenvOrProperty("OLLAMA_MODEL", "ollama.model", "llama3.2");
+        String mockFlag = getenvOrProperty("MOCK_AI", "mock.ai", "");
+        this.mock = mockFlag != null && !mockFlag.isBlank();
+        System.out.println("AiService configured: endpoint=" + endpoint + " model=" + model);
     }
 
     String ask(String roomPrompt, List<String> timeline) {
+        if (mock) {
+            // Simple deterministic mock reply useful for testing when Ollama is unavailable
+            return "[Mock Bot] I am running in MOCK_AI mode and cannot reach the real LLM.";
+        }
         String prompt = buildPrompt(roomPrompt, timeline);
         String body = "{"
                 + "\"model\":\"" + JsonUtil.escape(model) + "\","
@@ -36,7 +44,9 @@ final class AiService {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return "[Bot unavailable: Ollama returned HTTP " + response.statusCode() + "]";
+                String body = response.body();
+                String snippet = body == null ? "" : (body.length() > 200 ? body.substring(0, 200) + "..." : body);
+                return "[Bot unavailable: Ollama returned HTTP " + response.statusCode() + ": " + snippet + "]";
             }
             String answer = JsonUtil.extractStringField(response.body(), "response");
             if (answer == null || answer.isBlank()) return "[Bot produced no response]";
