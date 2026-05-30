@@ -158,6 +158,7 @@ public final class ChatClient {
             case "/login" -> sendLine("LOGIN " + arg);
             case "/register" -> sendLine("REGISTER " + arg);
             case "/rooms" -> sendLine("ROOMS");
+            case "/ollama" -> sendLine("OLLAMA");
             case "/join" -> sendLine("JOIN " + arg);
             case "/create" -> sendLine("CREATE " + arg);
             case "/createai" -> sendLine("CREATEAI " + arg);
@@ -244,6 +245,7 @@ public final class ChatClient {
         System.out.println("  /login <username> <password>");
         System.out.println("  /register <username> <password>");
         System.out.println("  /rooms");
+        System.out.println("  /ollama                # check whether the server can reach Ollama");
         System.out.println("  /join <room name>       # joins existing room or creates normal room");
         System.out.println("  /create <room name>     # same as /join for normal rooms");
         System.out.println("  /createai <room>|<prompt>");

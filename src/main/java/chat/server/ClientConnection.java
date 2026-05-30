@@ -120,6 +120,7 @@ final class ClientConnection implements Runnable {
         String arg = parts.length > 1 ? parts[1] : "";
         switch (command) {
             case "ROOMS" -> sendRooms(session);
+            case "OLLAMA" -> session.enqueue(Protocol.OK + " " + state.rooms().aiService().healthCheck());
             case "JOIN", "CREATE" -> joinRoom(arg);
             case "CREATEAI", "JOINAI" -> createAiAndJoin(arg);
             case "MSG" -> postMessage(arg);
@@ -148,7 +149,7 @@ final class ClientConnection implements Runnable {
     }
 
     private void sendHelp(Session target) {
-        target.enqueue(Protocol.OK + " Commands: ROOMS | JOIN <room> | CREATE <room> | CREATEAI <room>|<prompt> | MSG <text> | LEAVE | QUIT");
+        target.enqueue(Protocol.OK + " Commands: ROOMS | OLLAMA | JOIN <room> | CREATE <room> | CREATEAI <room>|<prompt> | MSG <text> | LEAVE | QUIT");
     }
 
     private void joinRoom(String roomName) {

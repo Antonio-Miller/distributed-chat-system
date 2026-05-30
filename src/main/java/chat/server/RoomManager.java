@@ -49,6 +49,10 @@ final class RoomManager {
         }
     }
 
+    AiService aiService() {
+        return aiService;
+    }
+
     List<RoomInfo> listRooms() {
         lock.lock();
         try {

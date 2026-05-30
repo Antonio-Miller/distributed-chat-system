@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.List;
 
 final class AiService {
+    private static final String HEALTH_PROMPT = "healthcheck";
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3))
             .build();
@@ -44,8 +45,8 @@ final class AiService {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                String body = response.body();
-                String snippet = body == null ? "" : (body.length() > 200 ? body.substring(0, 200) + "..." : body);
+                String responseBody = response.body();
+                String snippet = responseBody == null ? "" : (responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody);
                 return "[Bot unavailable: Ollama returned HTTP " + response.statusCode() + ": " + snippet + "]";
             }
             String answer = JsonUtil.extractStringField(response.body(), "response");
@@ -58,6 +59,40 @@ final class AiService {
             return "[Bot interrupted]";
         } catch (RuntimeException e) {
             return "[Bot error: " + e.getMessage() + "]";
+        }
+    }
+
+    String healthCheck() {
+        if (mock) {
+            return "[AI check OK: MOCK_AI mode is enabled]";
+        }
+        String body = "{"
+                + "\"model\":\"" + JsonUtil.escape(model) + "\"," 
+                + "\"stream\":false,"
+                + "\"prompt\":\"" + JsonUtil.escape(HEALTH_PROMPT) + "\""
+                + "}";
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .timeout(Duration.ofSeconds(5))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                String responseBody = response.body();
+                String snippet = responseBody == null ? "" : (responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody);
+                return "[AI check failed: Ollama returned HTTP " + response.statusCode() + ": " + snippet + "]";
+            }
+            String answer = JsonUtil.extractStringField(response.body(), "response");
+            if (answer == null || answer.isBlank()) {
+                return "[AI check failed: Ollama responded but did not return a model response]";
+            }
+            return "[AI check OK: Ollama reachable at " + endpoint + "]";
+        } catch (IOException e) {
+            return "[AI check failed: cannot connect to local Ollama at " + endpoint + "]";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "[AI check interrupted]";
         }
     }
 

@@ -15,7 +15,8 @@ Multi-user client-server chat system for the CPD Distributed Systems assignment.
 ## Requirements
 
 - Java SE 21 or newer.
-- (Optional) Ollama running locally for AI rooms.
+- Ollama installed locally for AI rooms.
+- A terminal emulator that can open new windows if you want to use the launcher script.
 
 ## Compile
 
@@ -147,18 +148,57 @@ If the keystore is not found, the server falls back to plain TCP (with a warning
 
 ## Ollama setup (for AI rooms)
 
+Install Ollama on your computer first:
+
+- Linux: follow the official installer at https://ollama.com/download
+- macOS: install from the official Ollama app or the download page
+- Windows: install from the official Ollama app or the download page
+
+Then verify the service is running:
+
+```bash
+ollama serve
+```
+
+In another terminal, pull the model used by default by this project:
+
+```bash
+ollama pull llama3.2
+```
+
 Default settings:
 
-```
+```bash
 OLLAMA_URL=http://localhost:11434/api/generate
 OLLAMA_MODEL=llama3.2
 ```
 
-Override with environment variables or system properties:
+You can override them with environment variables or system properties:
 
 ```bash
-java -Dollama.model=llama3.2:1b -cp out chat.server.ChatServer 12345
+OLLAMA_MODEL=llama3.2:1b java -cp out chat.server.ChatServer
+java -Dollama.url=http://localhost:11434/api/generate -cp out chat.server.ChatServer
 ```
+
+To check connectivity from the chat client, use:
+
+```bash
+/ollama
+```
+
+The client prints whether the server can reach Ollama or not.
+
+## Run
+
+```bash
+java -cp out chat.server.ChatServer [port]
+```
+
+```bash
+java -cp out chat.client.ChatClient [host] [port]
+``` 
+
+The script expects a GUI terminal emulator such as `gnome-terminal`, `kitty`, `konsole`, `xfce4-terminal`, `mate-terminal`, `alacritty`, or `xterm`. If no GUI terminal is available, it falls back to background log files.
 
 ## Protocol
 
