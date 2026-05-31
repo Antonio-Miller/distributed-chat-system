@@ -1,4 +1,4 @@
-# CPD Assignment 2 - Academic Report
+# CPD Assignment 2
 
 ## TCP Chat System in Java 21
 
