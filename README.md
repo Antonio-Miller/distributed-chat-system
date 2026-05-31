@@ -2,7 +2,7 @@
 
 ## TCP Chat System in Java 21
 
-This report documents the design, implementation, setup, installation, and execution of the Assignment 2 project. The project is a multi-user TCP chat system implemented in Java 21 for the CPD Distributed Systems assignment. It explores client-server communication, concurrency, synchronization, persistence, fault tolerance, security, and optional AI integration through a local Ollama model.
+This report documents the design, implementation, setup, installation, and execution of the Assignment 2 project. The project is a multi-user TCP chat system implemented in Java 21. It explores client-server communication, concurrency, synchronization, persistence, fault tolerance, security, and optional AI integration through a local Ollama model.
 
 Group members:
 
