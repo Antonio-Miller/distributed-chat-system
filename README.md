@@ -1,3 +1,23 @@
+# Distributed Chat System
+
+A multi-user **TCP chat system in Java 21**. Users authenticate, join rooms and exchange messages through a central server. The system recovers sessions after a broken connection, applies backpressure with bounded outbound queues, supports optional **TLS encryption**, and offers **AI-assisted rooms** that call a local LLM through Ollama.
+
+Built by a team of 3 for the Parallel and Distributed Computing course (L.EIC, FEUP, 2025/26), Assignment 2. Grade: **17.6/20**.
+
+## Highlights
+
+- **Java 21 virtual threads**: one lightweight thread per client with a simple blocking I/O model
+- **Explicit concurrency control**: shared state protected with locks and conditions
+- **Fault tolerance**: sessions persist on disk and resume after a disconnection
+- **Security**: salted SHA-256 password hashing and optional TLS
+- **AI rooms**: room messages can be answered by a local model through Ollama
+
+## Team
+
+António Miller, Francisco Bandeira, José Reis
+
+---
+
 # CPD Assignment 2
 
 ## TCP Chat System in Java 21
